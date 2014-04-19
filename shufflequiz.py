@@ -77,6 +77,13 @@
 
 # Options
 # -------
+#
+#   There's a number of available options.
+#   Just call this script with -h option to check them
+
+
+# TODO: think on allowing concrete weight spec on quiz file
+
 import sys, os
 import random
 import argparse
@@ -84,16 +91,24 @@ import argparse
 _QUESTION_MARK = "pregunta"
 _DESCRIPTION_MARK = "enunciat"
 _ANSWER_MARK = "resposta"
+_RST_ANSWER_SEPARATION = "\n\n"
+_RST_DESCR_ANSWER_SEPARATION = "-"*4
+_RST_QUESTION_SEPARATION = "\n\n"
+_RST_QUIZ_SEPARATION = "\n\n"
 #
 class Answer:
     def __init__(self, is_correct, is_final):
         self.is_correct = is_correct
         self.is_final = is_final
         self.text = ""
+        self.weight = 0
 
     def add_description(self, text):
         self.text += text
         return self
+
+    def set_weight(self, weight):
+        self.weight =  weight
 
     def is_complete(self):
         """ true if it has an unempty text """
@@ -106,6 +121,13 @@ class Answer:
 
     def __repr__(self):
         return '{ "is_correct":%s, "is_final":%s, "text":"%s" }'%(self.is_correct, self.is_final, self.text)
+
+    def toRST(self, nr, answer_weighted):
+        """ converts this answer into rst format.
+            Includes weight when answer_weighted """
+        rst_weight = "[%.2f] "%self.weight if answer_weighted else ""
+        rst_answer_id = chr(ord("a")+nr-1)
+        return "%s*%s)* %s"%(rst_weight, rst_answer_id, self.text)
 
 class Question:
     def __init__(self, options):
@@ -123,7 +145,10 @@ class Question:
         return self
 
     def addAnswer(self, answer):
-        self.answers.append(answer)
+        if answer.is_final and self.options.placefinals:
+            self.final_answers.append(answer)
+        else:
+            self.answers.append(answer)
         self.current_answer = answer
         return self
 
@@ -149,6 +174,7 @@ class Question:
         self.title = ""
         self.descr = ""
         self.answers = []
+        self.final_answers = []
         self.current_answer = None
         return self
 
@@ -157,10 +183,28 @@ class Question:
             and shuffles answers if required. """
         self.title = self.title.strip()
         self.descr = self.descr.strip()
+        self._compute_weights()
         self._shuffle_answers()
-        for answer in self.answers:
-            answer.postprocess()
+        self._postprocess_answers()
         return self
+
+    def _compute_weights(self):
+        """ from the number of correct and incorrect recollected answers,
+        computes the weight for correct and incorrect answers."""
+        answers = self.answers + self.final_answers
+        nr_correct_answers = sum( 1 for answer in answers if answer.is_correct )
+        nr_incorrect_answers = len(answers) - nr_correct_answers
+        correct_weight = 1.0 / nr_correct_answers if nr_correct_answers > 0 else 0
+        incorrect_weight = -1.0 / nr_incorrect_answers if nr_incorrect_answers > 0 else 0
+        for answer in answers:
+            if answer.is_correct:
+                answer.set_weight(correct_weight)
+            else:
+                answer.set_weight(incorrect_weight)
+
+    def _postprocess_answers(self):
+        for answer in self.answers + self.final_answers:
+            answer.postprocess()
 
     def _shuffle_answers(self):
         """ shuffles answers if required """
@@ -176,23 +220,69 @@ class Question:
         new_question.title = self.title
         new_question.descr = self.descr
         new_question.answers = self.answers
+        new_question.final_answers = self.final_answers
         return new_question
+
+    def toRST(self, nr, answers_weighted = False):
+        """ converts this question to rst format and numbers it with
+            nr.
+            If answers_weighted, it includes the corresponding
+            weight on each answer """
+        title = self._rst_compose_title(nr)
+        descr = self.descr
+        answers = self._rst_compose_answers(answers_weighted)
+        return "\n%s\n%s\n\n%s\n\n%s\n"%(title, descr,
+                _RST_DESCR_ANSWER_SEPARATION, answers)
+
+    def _rst_compose_title(self, nr):
+        """ composes the title in rst format. """
+        title = "%s %s: %s"%(_QUESTION_MARK, nr, self.title)
+        underline = compose_underline(title)
+        return "%s\n%s\n"%(title, underline)
+
+    def _rst_compose_answers(self, answers_weighted):
+        """ composes the answer list in rst format.
+            In case answers_weighted then it will show the
+            corresponding weights for each answer """
+        rstanswers = []
+        start_nr = 1
+        for answer in self.answers + self.final_answers:
+            rstanswers.append(answer.toRST(start_nr, answers_weighted))
+            start_nr += 1
+        return _RST_ANSWER_SEPARATION.join(rstanswers)
 
     def __repr__(self):
         answers = ",".join([ repr(r) for r in self.answers ])
         return '{ "title": "%s", "descr":"%s", "answers":[%s] }'%(self.title, self.descr, answers)
 #
 class Quiz:
-    def __init__(self, filename, options):
+    def __init__(self, filename, options, questions=None):
         self.filename = filename
         self.options = options
-        self.questions = []
+        self.questions = [] if questions == None else questions
 
     def run(self):
         self._scan_quiz_file()
+
+    def postprocess(self):
+        """ performs shuffling and cleaning up on questions """
         self._shuffle_questions()
         for q in self.questions:
             q.postprocess()
+
+    def nr_questions(self):
+        """ returns the number of questions in this quiz """
+        return len(self.questions)
+
+    def toRST(self, start_nr, answers_weighted=False):
+        """ converts quiz to rst format with questions numbered
+        from start_nr """
+        rstquestions = []
+        for question in self.questions:
+            rstquestions.append(question.toRST(start_nr,
+                answers_weighted))
+            start_nr += 1
+        return _RST_QUIZ_SEPARATION.join(rstquestions)
 
     def _shuffle_questions(self):
         """ shuffles questions if required """
@@ -320,12 +410,12 @@ class Quiz:
 class QuizSet:
     def __init__(self, options):
         self.options = options
-        self.questions = []  # list of questions
+        self.quizes = []
 
     def run(self):
-        self._shuffle_inputfiles()
         for quizfile in self.options.files:
             self._process(quizfile)
+        self._postprocess()
 
     def export(self):
         """ generates output """
@@ -334,21 +424,41 @@ class QuizSet:
         self._export_eval()
 
     def _export_exam(self):
-        print "XXX HERE AM I!"
+        with open(self.options.outputfilenames["exam"], "w") as f:
+            start_nr = self.options.startnr
+            for quiz in self.quizes:
+                f.write(quiz.toRST(start_nr))
+                f.write(_RST_QUIZ_SEPARATION)
+                start_nr += quiz.nr_questions()
+
     def _export_validation(self):
-        print "XXX HERE AM I!"
+        with open(self.options.outputfilenames["revision"], "w") as f:
+            start_nr = self.options.startnr
+            for quiz in self.quizes:
+                f.write(quiz.toRST(start_nr, answers_weighted=True))
+                f.write(_RST_QUIZ_SEPARATION)
+                start_nr += quiz.nr_questions()
+
     def _export_eval(self):
-        print "XXX HERE AM I!"
+        with open(self.options.outputfilenames["eval"], "w") as f:
+            print "XXX HERE AM I!", self.options.outputfilenames["eval"]
 
     def _process(self, filename):
         """ processes the corresponding quiz """
         quiz = Quiz(filename, self.options)
         quiz.run()
+        self.quizes.append(quiz)
 
-    def _shuffle_inputfiles(self):
-        """ shuffle input files if required """
+    def _postprocess(self):
+        """ performs shuffling and clean up """
         if self.options.shufflefiles:
-            random.shuffle(self.options.files)
+            all_questions = []
+            for quiz in self.quizes:
+                all_questions += quiz.questions
+            only_quiz = Quiz("allfiles", self.options, all_questions)
+            self.quizes = [ only_quiz ]
+        for quiz in self.quizes:
+            quiz.postprocess()
 #
 def compose_argparse():
     """ composes and returns an ArgumentParser """
@@ -366,23 +476,30 @@ def compose_argparse():
             help=u"Do shuffle questions", dest="shufflequestions")
     p.add_argument("-a", "--shuffleAnswers", action="store_true", 
             help=u"Do shuffle questions and answers", dest="shuffleanswers")
-    p.add_argument("-f", "--placeFinal", action="store_true",
-            help=u"Do place final answers at the end (default)",
+    p.add_argument("-f", "--noPlaceFinal", action="store_false",
+            help=u"Do not place final answers at the end",
             dest="placefinals", default=True)
     p.add_argument("-m", "--shuffleFiles", dest="shufflefiles",
             help=u"Do shuffle questions amongst files")
 
     # output options
     p.add_argument("-o", "--outputFilename", action="store",
-            help="Set the output filename", dest="outputfilename")
+            help="Set the output filename", dest="outputfile")
     p.add_argument("-r", "--rewriteOutput", action="store_true",
             help="Do not ask when any output file already exists",
             dest="overwrite")
+
+    # other options
+    p.add_argument("-s", "--startQuestionNumber", action="store",
+            type=int,
+            help=u"Start question numbering by this value (default 1)",
+            dest="startnr", default=1)
+
     return p
 #
 def exit_if_option_errors(options):
     """ filters option errors and exits if there are any """
-    if not options.outputfilename:
+    if not options.outputfile:
         show_error_and_exit("Output filename must be set")
     if options.noshuffle:
         if options.shuffleall or options.shufflequestions or options.shuffleanswers or options.shufflefiles:
@@ -404,10 +521,10 @@ def compose_output_filenames_and_exit_if_no_overwrite(options):
     """ composes output filenames and check whether they already exist
     and overwrite option hasn't been set.
     If everything is ok, it adds outputfilenames to options """
-    filenames = compose_output_filenames(options.outputfilename)
+    filenames = compose_output_filenames(options.outputfile)
     if not options.overwrite:
         exit_if_outputfiles_already_exist(filenames.values())
-    options.outputfilename = filenames
+    options.outputfilenames = filenames
 #
 def get_options():
     """ returns the call arguments as an optparse """
@@ -476,6 +593,10 @@ def is_a_description(lin):
 def is_an_answer(lin):
     """ true if lin is the start of a answer """
     return lin.startswith(".. %s:"%_ANSWER_MARK)
+#
+def compose_underline(text, char="-"):
+    """ composes an underline for text with char """
+    return char * len(text.decode("utf-8"))
 #
 def process_answer_mark(lin):
     """ it lin is an answer, it returns whether it is 
