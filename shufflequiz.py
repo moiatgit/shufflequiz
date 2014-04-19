@@ -95,6 +95,11 @@ _RST_ANSWER_SEPARATION = "\n\n"
 _RST_DESCR_ANSWER_SEPARATION = "-"*4
 _RST_QUESTION_SEPARATION = "\n\n"
 _RST_QUIZ_SEPARATION = "\n\n"
+_GIFT_QUESTION_SEPARATION = "\n\n"
+_GIFT_ANSWER_SEPARATION = "\n"
+#
+_GIFT_HEADER_TEMPLATE = "::Pregunta %s::[markdown]Indica quines respostes has marcat per la **pregunta nr. %s**."
+_GIFT_ANSWER_TEMPLATE = "~%%%s%%He marcat la resposta %s)"
 #
 class Answer:
     def __init__(self, is_correct, is_final):
@@ -128,6 +133,13 @@ class Answer:
         rst_weight = "[%.2f] "%self.weight if answer_weighted else ""
         rst_answer_id = compose_answer_id(nr)
         return "%s*%s)* %s"%(rst_weight, rst_answer_id, self.text)
+
+    def toEvalGift(self, nr):
+        """ extracts evaluation information from this answer in gift
+        format """
+        weight = "%.3f"%(self.weight * 100)
+        answer_id = compose_answer_id(nr)
+        return _GIFT_ANSWER_TEMPLATE%(weight, answer_id)
 
 class Question:
     def __init__(self, options):
@@ -261,6 +273,13 @@ class Question:
 
         return all_headers, all_weights
 
+    def toEvalGift(self, nr):
+        """ extracts evaluation information from this question in
+        gift format """
+        header = _GIFT_HEADER_TEMPLATE%(nr, nr)
+        answers = self._evalgift_compose_answers()
+        return "%s\n%s\n}\n"%(header, answers)
+
     def _rst_compose_title(self, nr):
         """ composes the title in rst format. """
         title = "%s %s: %s"%(_QUESTION_MARK, nr, self.title)
@@ -277,6 +296,16 @@ class Question:
             rstanswers.append(answer.toRST(start_nr, answers_weighted))
             start_nr += 1
         return _RST_ANSWER_SEPARATION.join(rstanswers)
+
+    def _evalgift_compose_answers(self):
+        """ composes the evaluation information of the answer 
+        list in gift format."""
+        giftanswers = []
+        start_nr = 1
+        for answer in self.answers + self.final_answers:
+            giftanswers.append(answer.toEvalGift(start_nr))
+            start_nr += 1
+        return _GIFT_ANSWER_SEPARATION.join(giftanswers)
 
     def __repr__(self):
         answers = ",".join([ repr(r) for r in self.answers ])
@@ -309,7 +338,7 @@ class Quiz:
             rstquestions.append(question.toRST(start_nr,
                 answers_weighted))
             start_nr += 1
-        return _RST_QUIZ_SEPARATION.join(rstquestions)
+        return _RST_QUESTION_SEPARATION.join(rstquestions)
 
     def toEval(self, start_nr):
         """ extracts from this quiz the evaluation information.
@@ -323,6 +352,15 @@ class Quiz:
             all_headers += headers
             all_weights += weights
         return all_headers, all_weights
+
+    def toEvalGift(self, start_nr):
+        """ extracts evaluation information of this quiz in gift
+        format"""
+        rstquestions = []
+        for question in self.questions:
+            rstquestions.append(question.toEvalGift(start_nr))
+            start_nr += 1
+        return _GIFT_QUESTION_SEPARATION.join(rstquestions)
 
     def _shuffle_questions(self):
         """ shuffles questions if required """
@@ -464,6 +502,7 @@ class QuizSet:
         self._export_exam()
         self._export_validation()
         self._export_eval()
+        self._export_gift()
 
     def _export_exam(self):
         with open(self.options.outputfilenames["exam"], "w") as f:
@@ -496,6 +535,13 @@ class QuizSet:
             f.write("\n")
             f.write(char.join(str(w) for w in all_weights))
             f.write("\n")
+
+    def _export_gift(self):
+        with open(self.options.outputfilenames["evalgift"], "w") as f:
+            start_nr = self.options.startnr
+            for quiz in self.quizes:
+                f.write(quiz.toEvalGift(start_nr))
+                start_nr += quiz.nr_questions()
 
     def _process(self, filename):
         """ processes the corresponding quiz """
@@ -605,15 +651,22 @@ def get_options():
 def compose_output_filenames(filename):
     """ composes and returns the output filenames from filename.
         It returns a dict with { "exam":"«filename».rst",
-        "revision":«filename».rev.rst", "eval":"«filename».eval.csv
+        "revision":«filename».rev.rst", "eval":"«filename».eval.csv",
+        "evalgift":"«filename».eval.gift"
         """
     basename, ext = os.path.splitext(filename)
-    outputfilename = filename if ext == ".rst" else "%s.rst"%basename
+    if ext == ".rst":
+        name = basename
+        outputfilename = filename
+    else:
+        name = filename
+        outputfilename = "%s.rst"%name
     filenames = { 
             "exam": outputfilename, 
             "revision":
-            "%s.rev.rst"%basename, 
-            "eval":"%s.eval.csv"%basename
+            "%s.rev.rst"%name, 
+            "eval":"%s.eval.csv"%name,
+            "evalgift":"%s.eval.gift"%name
             }
     return filenames
 #
