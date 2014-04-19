@@ -301,7 +301,7 @@ class Quiz:
             state = "title"
             question.reset()
         elif is_a_description(lin) or is_an_answer(lin):
-            show_error_and_exit("file: %s [at line: %s] -> expected question but another mark found"%(self.filename, nlin), 3)
+            show_scan_error_and_exit(self.filename, nlin, "expected question but another mark found")
         else:
             state = "question"
         return state
@@ -311,14 +311,14 @@ class Quiz:
             updates question and returns a new state, or quits on error """
         state = "title"
         if is_a_question(lin):
-            show_error_and_exit("file: %s [at line: %s] -> unexpected start of question"%(self.filename, nlin), 3)
+            show_scan_error_and_exit(self.filename, nlin, "unexpected start of question")
         elif is_a_description(lin):   # title is done
             if question.has_proper_title():
                 state = "description"
             else:
-                show_error_and_exit("file: %s [at line: %s] -> question title unset"%(self.filename, nlin), 3)
+                show_scan_error_and_exit(self.filename, nlin, "question title unset")
         elif is_an_answer(lin):
-            show_error_and_exit("file: %s [at line: %s] -> unexpected start of answer"%(self.filename, nlin), 3)
+            show_scan_error_and_exit(self.filename, nlin, "unexpected start of answer")
         elif not is_a_comment(lin):
             question.appendToTitle(lin)
         return state
@@ -328,7 +328,7 @@ class Quiz:
             Updates question or quits on badformed question """
         answer_header = process_answer_mark(lin)
         if answer_header == None:
-            show_error_and_exit("file: %s [at line: %s] -> badformed answer header"%(self.filename, nlin), 3)
+            show_scan_error_and_exit(self.filename, nlin, "badformed answer header")
         else:
             is_correct, is_final = answer_header
             partial_answer = Answer(is_correct, is_final)
@@ -343,16 +343,16 @@ class Quiz:
                 self._process_current_answer(lin, nlin, question)
                 state = "answer"
             else:
-                show_error_and_exit("file: %s [at line: %s] -> question description unset"%(self.filename, nlin), 3)
+                show_scan_error_and_exit(self.filename, nlin, "question description unset")
         elif is_a_question(lin):    # previous question had no responses (it is ok)
             if question.has_proper_description():
                 self.questions.append(question.clone())
                 state = "title"
                 question.reset()
             else:
-                show_error_and_exit("file: %s [at line: %s] -> question description unset"%(self.filename, nlin), 3)
+                show_scan_error_and_exit(self.filename, nlin, "question description unset")
         elif is_a_description(lin):    # badformed: more than one description mark
-                show_error_and_exit("file: %s [at line: %s] -> too many description marks"%(self.filename, nlin), 3)
+                show_scan_error_and_exit(self.filename, nlin, "too many description marks")
         elif not is_a_comment(lin):
             question.add_description(lin)
         return state
@@ -367,16 +367,16 @@ class Quiz:
                 question.reset()
                 state = "title"
             else:
-                show_error_and_exit("file: %s [at line: %s] -> unfinished answer"%(self.filename, nlin), 3)
+                show_scan_error_and_exit(self.filename, nlin, "unfinished answer")
         elif is_an_answer(lin):     # it is a new answer
             if question.get_nr_answers() >= self.options.maxanswers:
-                show_error_and_exit("file: %s [at line: %s] -> exceded max nr of answers per question"%(self.filename, nlin), 3)
+                show_scan_error_and_exit(self.filename, nlin, "exceded max nr of answers per question")
             elif question.has_finished_current_answer():
                 self._process_current_answer(lin, nlin, question)
             else:
-                show_error_and_exit("file: %s [at line: %s] -> unfinished answer"%(self.filename, nlin), 3)
+                show_scan_error_and_exit(self.filename, nlin, "unfinished answer")
         elif is_a_description(lin):
-            show_error_and_exit("file: %s [at line: %s] -> unexpected description mark"%(self.filename, nlin), 3)
+            show_scan_error_and_exit(self.filename, nlin, "unexpected description mark")
         elif not is_a_comment(lin):
             question.current_answer.add_description(lin)
         return state
@@ -412,7 +412,7 @@ class Quiz:
             if question.is_complete():
                 self.questions.append(question) # it is not required to clone
             else:
-                show_error_and_exit("file: %s [at line: %s] -> end of file reached leaving unfinished question"%(self.filename, nlin), 3)
+                show_scan_error_and_exit(self.filename, nlin, "end of file reached leaving unfinished question")
 #
 class QuizSet:
     def __init__(self, options):
@@ -563,6 +563,10 @@ def compose_output_filenames(filename):
             "eval":"%s.eval.csv"%basename
             }
     return filenames
+#
+def show_scan_error_and_exit(filename, line, msg):
+    """ shows an error in scanning the file, then quits """
+    show_error_and_exit("file: %s [line: %s] -> %s."%(filename, line, msg), 3)
 #
 def show_error_and_exit(msg, exit_code=1):
     """ shows an error missage and exists with exit_code """
