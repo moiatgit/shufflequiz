@@ -152,6 +152,11 @@ class Question:
         self.current_answer = answer
         return self
 
+    def get_nr_answers(self):
+        """ returns the number of answers already included in this
+        question """
+        return len(self.answers) + len(self.final_answers)
+
     def has_proper_title(self):
         """ true if it has proper title """
         return self.title <> ""
@@ -364,7 +369,9 @@ class Quiz:
             else:
                 show_error_and_exit("file: %s [at line: %s] -> unfinished answer"%(self.filename, nlin), 3)
         elif is_an_answer(lin):     # it is a new answer
-            if question.has_finished_current_answer():
+            if question.get_nr_answers() >= self.options.maxanswers:
+                show_error_and_exit("file: %s [at line: %s] -> exceded max nr of answers per question"%(self.filename, nlin), 3)
+            elif question.has_finished_current_answer():
                 self._process_current_answer(lin, nlin, question)
             else:
                 show_error_and_exit("file: %s [at line: %s] -> unfinished answer"%(self.filename, nlin), 3)
@@ -494,6 +501,10 @@ def compose_argparse():
             type=int,
             help=u"Start question numbering by this value (default 1)",
             dest="startnr", default=1)
+    p.add_argument("-M", "--maxAnswersPerQuestion", action="store",
+            type=int,
+            help=u"Set the maximum number of answers per question (default 10)",
+            dest="maxanswers", default=10)
 
     return p
 #
@@ -504,6 +515,8 @@ def exit_if_option_errors(options):
     if options.noshuffle:
         if options.shuffleall or options.shufflequestions or options.shuffleanswers or options.shufflefiles:
             show_error_and_exit("Incompatible options")
+    if options.maxanswers < 2:
+        show_error_and_exit("Maximum number of answers must be at least 2")
     for fn in options.files:
         if not fn.endswith(".quiz"):
             show_error_and_exit("Input files must have .quiz extension")
