@@ -126,7 +126,7 @@ class Answer:
         """ converts this answer into rst format.
             Includes weight when answer_weighted """
         rst_weight = "[%.2f] "%self.weight if answer_weighted else ""
-        rst_answer_id = chr(ord("a")+nr-1)
+        rst_answer_id = compose_answer_id(nr)
         return "%s*%s)* %s"%(rst_weight, rst_answer_id, self.text)
 
 class Question:
@@ -239,6 +239,28 @@ class Question:
         return "\n%s\n%s\n\n%s\n\n%s\n"%(title, descr,
                 _RST_DESCR_ANSWER_SEPARATION, answers)
 
+    def toEval(self, nr):
+        """ extracts evaluation information from this question.
+        Returns the list of headers (question_nr.answer_id) and the
+        list of weights of each answer """
+        all_headers = []
+        all_weights = []
+        start_nr = 1
+        for answer in self.answers + self.final_answers:
+            header = '"%s.%s"'%(nr, compose_answer_id(start_nr))
+            weight = answer.weight
+            start_nr += 1
+            all_headers.append(header)
+            all_weights.append(weight)
+        if self.options.fixavalanswernr:
+            for a in range(start_nr, self.options.maxanswers + 1 ):
+                header = '"%s.%s"'%(nr, compose_answer_id(a))
+                weight = 0
+                all_headers.append(header)
+                all_weights.append(weight)
+
+        return all_headers, all_weights
+
     def _rst_compose_title(self, nr):
         """ composes the title in rst format. """
         title = "%s %s: %s"%(_QUESTION_MARK, nr, self.title)
@@ -293,7 +315,14 @@ class Quiz:
         """ extracts from this quiz the evaluation information.
         Returns two lists: first one with headers
         (question_nr.answer_id) and weight per answer """
-        return [], []
+        all_headers = []
+        all_weights = []
+        for question in self.questions:
+            headers, weights = question.toEval(start_nr)
+            start_nr += 1
+            all_headers += headers
+            all_weights += weights
+        return all_headers, all_weights
 
     def _shuffle_questions(self):
         """ shuffles questions if required """
@@ -461,9 +490,12 @@ class QuizSet:
             start_nr += quiz.nr_questions()
             all_headers += headers
             all_weights += weights
-        #with open(self.options.outputfilenames["eval"], "w") as f:
-        print all_headers
-        print all_weights
+        char = self.options.csvseparator
+        with open(self.options.outputfilenames["eval"], "w") as f:
+            f.write(char.join(all_headers))
+            f.write("\n")
+            f.write(char.join(str(w) for w in all_weights))
+            f.write("\n")
 
     def _process(self, filename):
         """ processes the corresponding quiz """
@@ -520,6 +552,12 @@ def compose_argparse():
             type=int,
             help=u"Set the maximum number of answers per question (default 10)",
             dest="maxanswers", default=10)
+    p.add_argument("-F", "--fixAvalAnswerNr", action="store_true", 
+            help=u"Do fix the number of answers to the maxAnswersPerQuestion on the avaluation output",
+            dest="fixavalanswernr")
+    p.add_argument("-c", "--csvSeparator", action="store",
+            help=u"Set the separator for the csv file with the evaluation information (default ',')",
+            dest="csvseparator", default=',')
 
     return p
 #
@@ -629,6 +667,10 @@ def is_an_answer(lin):
 def compose_underline(text, char="-"):
     """ composes an underline for text with char """
     return char * len(text.decode("utf-8"))
+#
+def compose_answer_id(nr):
+    """ returns an answer id from nr """
+    return chr(ord("a")+nr-1)
 #
 def process_answer_mark(lin):
     """ it lin is an answer, it returns whether it is 
