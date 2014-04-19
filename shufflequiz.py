@@ -289,6 +289,12 @@ class Quiz:
             start_nr += 1
         return _RST_QUIZ_SEPARATION.join(rstquestions)
 
+    def toEval(self, start_nr):
+        """ extracts from this quiz the evaluation information.
+        Returns two lists: first one with headers
+        (question_nr.answer_id) and weight per answer """
+        return [], []
+
     def _shuffle_questions(self):
         """ shuffles questions if required """
         if self.options.shufflequestions:
@@ -447,8 +453,17 @@ class QuizSet:
                 start_nr += quiz.nr_questions()
 
     def _export_eval(self):
-        with open(self.options.outputfilenames["eval"], "w") as f:
-            print "XXX HERE AM I!", self.options.outputfilenames["eval"]
+        all_headers = []
+        all_weights = []
+        start_nr = self.options.startnr
+        for quiz in self.quizes:
+            headers, weights = quiz.toEval(start_nr)
+            start_nr += quiz.nr_questions()
+            all_headers += headers
+            all_weights += weights
+        #with open(self.options.outputfilenames["eval"], "w") as f:
+        print all_headers
+        print all_weights
 
     def _process(self, filename):
         """ processes the corresponding quiz """
