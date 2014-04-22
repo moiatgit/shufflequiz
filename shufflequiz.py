@@ -98,8 +98,10 @@ _RST_QUIZ_SEPARATION = "\n\n"
 _GIFT_QUESTION_SEPARATION = "\n\n"
 _GIFT_ANSWER_SEPARATION = "\n"
 #
-_GIFT_HEADER_TEMPLATE = "::Pregunta %s::[markdown]Indica quines respostes has marcat per la **pregunta nr. %s**."
+_GIFT_HEADER_TEMPLATE = "::Pregunta %s::[markdown]Indica quines respostes has marcat per la **pregunta nr. %s**.{"
 _GIFT_ANSWER_TEMPLATE = "~%%%s%%He marcat la resposta %s)"
+#
+_QUESTION_TITLE = "Pregunta"
 #
 class Answer:
     def __init__(self, is_correct, is_final):
@@ -132,7 +134,7 @@ class Answer:
             Includes weight when answer_weighted """
         rst_weight = "[%.2f] "%self.weight if answer_weighted else ""
         rst_answer_id = compose_answer_id(nr)
-        return "%s*%s)* %s"%(rst_weight, rst_answer_id, self.text)
+        return "%s**%s)** %s"%(rst_weight, rst_answer_id, self.text)
 
     def toEvalGift(self, nr):
         """ extracts evaluation information from this answer in gift
@@ -282,7 +284,7 @@ class Question:
 
     def _rst_compose_title(self, nr):
         """ composes the title in rst format. """
-        title = "%s %s: %s"%(_QUESTION_MARK, nr, self.title)
+        title = "%s %s: %s"%(_QUESTION_TITLE, nr, self.title)
         underline = compose_underline(title)
         return "%s\n%s\n"%(title, underline)
 
