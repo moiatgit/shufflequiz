@@ -83,6 +83,9 @@
 
 
 # TODO: think on allowing concrete weight spec on quiz file
+# Fix:
+#   - punctuations allowed by Moodle gift
+#   - separation between questions in gift
 
 import sys, os
 import random
@@ -95,27 +98,47 @@ _RST_ANSWER_SEPARATION = "\n\n"
 _RST_DESCR_ANSWER_SEPARATION = "-"*4
 _RST_QUESTION_SEPARATION = "\n\n"
 _RST_QUIZ_SEPARATION = "\n\n"
-_GIFT_QUESTION_SEPARATION = "\n\n"
+_GIFT_QUESTION_SEPARATION = "\n\n\n"
 _GIFT_ANSWER_SEPARATION = "\n"
 #
 _GIFT_HEADER_TEMPLATE = "::Pregunta %s::[markdown]Indica quines respostes has marcat per la **pregunta nr. %s**.{"
-_GIFT_ANSWER_TEMPLATE = "~%%%s%%He marcat la resposta %s)"
+_GIFT_ANSWER_TEMPLATE = "\t~%%%s%%He marcat la resposta %s)"
 #
 _QUESTION_TITLE = "Pregunta"
+#
+_MAP_GIFT_WEIGHTS = { # weights from nr of answers of the same category
+    1:"100",
+    2:"50",
+    3:"33.333",
+    4:"25",
+    5:"20",
+    6:"16.666",
+    7:"14.2857",
+    8:"12.5",
+    9:"11.111",
+    10:"1'",
+    -10:"-10",
+    -9:"-11.111",
+    -8:"-12.5",
+    -7:"-14.2857",
+    -6:"-16.666",
+    -5:"-20",
+    -4:"-25",
+    -3:"-33.333",
+    -2:"-50",
+    -1:"-100" 
+}
+
 #
 class Answer:
     def __init__(self, is_correct, is_final):
         self.is_correct = is_correct
         self.is_final = is_final
         self.text = ""
-        self.weight = 0
 
     def add_description(self, text):
         self.text += text
         return self
-
-    def set_weight(self, weight):
-        self.weight =  weight
 
     def is_complete(self):
         """ true if it has an unempty text """
@@ -128,20 +151,6 @@ class Answer:
 
     def __repr__(self):
         return '{ "is_correct":%s, "is_final":%s, "text":"%s" }'%(self.is_correct, self.is_final, self.text)
-
-    def toRST(self, nr, answer_weighted):
-        """ converts this answer into rst format.
-            Includes weight when answer_weighted """
-        rst_weight = "[%.2f] "%self.weight if answer_weighted else ""
-        rst_answer_id = compose_answer_id(nr)
-        return "%s**%s)** %s"%(rst_weight, rst_answer_id, self.text)
-
-    def toEvalGift(self, nr):
-        """ extracts evaluation information from this answer in gift
-        format """
-        weight = "%.3f"%(self.weight * 100)
-        answer_id = compose_answer_id(nr)
-        return _GIFT_ANSWER_TEMPLATE%(weight, answer_id)
 
 class Question:
     def __init__(self, options):
@@ -158,12 +167,14 @@ class Question:
         self.descr += descr
         return self
 
-    def addAnswer(self, answer):
+    def add_answer(self, answer):
         if answer.is_final and self.options.placefinals:
             self.final_answers.append(answer)
         else:
             self.answers.append(answer)
         self.current_answer = answer
+        if answer.is_correct:
+            self.nr_correct_answers += 1
         return self
 
     def get_nr_answers(self):
@@ -195,6 +206,7 @@ class Question:
         self.answers = []
         self.final_answers = []
         self.current_answer = None
+        self.nr_correct_answers = 0
         return self
 
     def postprocess(self):
@@ -202,24 +214,9 @@ class Question:
             and shuffles answers if required. """
         self.title = self.title.strip()
         self.descr = self.descr.strip()
-        self._compute_weights()
         self._shuffle_answers()
         self._postprocess_answers()
         return self
-
-    def _compute_weights(self):
-        """ from the number of correct and incorrect recollected answers,
-        computes the weight for correct and incorrect answers."""
-        answers = self.answers + self.final_answers
-        nr_correct_answers = sum( 1 for answer in answers if answer.is_correct )
-        nr_incorrect_answers = len(answers) - nr_correct_answers
-        correct_weight = 1.0 / nr_correct_answers if nr_correct_answers > 0 else 0
-        incorrect_weight = -1.0 / nr_incorrect_answers if nr_incorrect_answers > 0 else 0
-        for answer in answers:
-            if answer.is_correct:
-                answer.set_weight(correct_weight)
-            else:
-                answer.set_weight(incorrect_weight)
 
     def _postprocess_answers(self):
         for answer in self.answers + self.final_answers:
@@ -240,9 +237,10 @@ class Question:
         new_question.descr = self.descr
         new_question.answers = self.answers
         new_question.final_answers = self.final_answers
+        new_question.nr_correct_answers = self.nr_correct_answers
         return new_question
 
-    def toRST(self, nr, answers_weighted = False):
+    def toRST(self, nr, answers_weighted):
         """ converts this question to rst format and numbers it with
             nr.
             If answers_weighted, it includes the corresponding
@@ -262,7 +260,7 @@ class Question:
         start_nr = 1
         for answer in self.answers + self.final_answers:
             header = '"%s.%s"'%(nr, compose_answer_id(start_nr))
-            weight = answer.weight
+            weight = self._compute_answer_weight_fulldecimal(answer.is_correct)
             start_nr += 1
             all_headers.append(header)
             all_weights.append(weight)
@@ -272,7 +270,6 @@ class Question:
                 weight = 0
                 all_headers.append(header)
                 all_weights.append(weight)
-
         return all_headers, all_weights
 
     def toEvalGift(self, nr):
@@ -280,7 +277,7 @@ class Question:
         gift format """
         header = _GIFT_HEADER_TEMPLATE%(nr, nr)
         answers = self._evalgift_compose_answers()
-        return "%s\n%s\n}\n"%(header, answers)
+        return "%s\n%s\n}\n%s"%(header, answers, _GIFT_QUESTION_SEPARATION)
 
     def _rst_compose_title(self, nr):
         """ composes the title in rst format. """
@@ -295,9 +292,30 @@ class Question:
         rstanswers = []
         start_nr = 1
         for answer in self.answers + self.final_answers:
-            rstanswers.append(answer.toRST(start_nr, answers_weighted))
+            answer_id = compose_answer_id(start_nr)
+            answer_text = answer.text
+            if answers_weighted:
+                answer_weight = self._compute_answer_weight_fulldecimal(answer.is_correct)
+                rst_weight = "[%.2f] "%answer_weight
+                rst_answer = "%s**%s)** %s"%(rst_weight, answer_id, answer_text)
+            else:
+                rst_answer = "**%s)** %s"%(answer_id, answer_text)
+            rstanswers.append(rst_answer)
             start_nr += 1
         return _RST_ANSWER_SEPARATION.join(rstanswers)
+
+    def _compute_answer_class(self, is_correct):
+        """ returns the number of answers in the class. 
+        The possible classes are: correct and incorrect answers.
+        This is a helping function to compute the weight of an answer.
+        When class is incorrect, the value return is negative. """
+        nr_correct = self.nr_correct_answers
+        return nr_correct if is_correct else nr_correct - len(self.answers)
+
+    def _compute_answer_weight_fulldecimal(self, is_correct):
+        """ computes and returns the weight of an answer when there are
+        as many as nr of its class. """
+        return 1.0 / self._compute_answer_class(is_correct)
 
     def _evalgift_compose_answers(self):
         """ composes the evaluation information of the answer 
@@ -305,13 +323,23 @@ class Question:
         giftanswers = []
         start_nr = 1
         for answer in self.answers + self.final_answers:
-            giftanswers.append(answer.toEvalGift(start_nr))
+            answer_weight = self._compute_answer_weight_for_gift(answer.is_correct)
+            answer_id = compose_answer_id(start_nr)
+            gift_answer = _GIFT_ANSWER_TEMPLATE%(answer_weight, answer_id)
+            giftanswers.append(gift_answer)
             start_nr += 1
         return _GIFT_ANSWER_SEPARATION.join(giftanswers)
 
+    def _compute_answer_weight_for_gift(self, is_correct):
+        """ returns the weight of an answer deppending on whether is_correct or not.
+        The result is a string with the format expected by Moodle's Gift """
+        nr = self._compute_answer_class(is_correct)
+        weight = _MAP_GIFT_WEIGHTS.get(nr, "%0.3f"%self._compute_answer_weight_fulldecimal(is_correct))
+        return weight
+
     def __repr__(self):
         answers = ",".join([ repr(r) for r in self.answers ])
-        return '{ "title": "%s", "descr":"%s", "answers":[%s] }'%(self.title, self.descr, answers)
+        return '{ "title": "%s", "descr":"%s", "answers":[%s], "nr_correct":%s }'%(self.title, self.descr, answers, self.nr_correct_answers)
 #
 class Quiz:
     def __init__(self, filename, options, questions=None):
@@ -332,7 +360,7 @@ class Quiz:
         """ returns the number of questions in this quiz """
         return len(self.questions)
 
-    def toRST(self, start_nr, answers_weighted=False):
+    def toRST(self, start_nr, answers_weighted):
         """ converts quiz to rst format with questions numbered
         from start_nr """
         rstquestions = []
@@ -407,7 +435,7 @@ class Quiz:
         else:
             is_correct, is_final = answer_header
             partial_answer = Answer(is_correct, is_final)
-            question.addAnswer(partial_answer)
+            question.add_answer(partial_answer)
 
     def _scan_description(self, lin, nlin, question):
         """ scans line on state="description"
@@ -510,7 +538,7 @@ class QuizSet:
         with open(self.options.outputfilenames["exam"], "w") as f:
             start_nr = self.options.startnr
             for quiz in self.quizes:
-                f.write(quiz.toRST(start_nr))
+                f.write(quiz.toRST(start_nr, answers_weighted=False))
                 f.write(_RST_QUIZ_SEPARATION)
                 start_nr += quiz.nr_questions()
 
@@ -745,8 +773,10 @@ def process_answer_mark(lin):
             correct = (value == '+')
             res = (correct, final)
     return res
-
 #
+def convert__weight_to_gift(weight):
+    """ it returns the weight as expected by Moodle's Gift format """
+    
 def main():
     options = get_options()
     quiz_set = QuizSet(options)
