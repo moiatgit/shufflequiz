@@ -175,6 +175,8 @@ class Question:
         self.current_answer = answer
         if answer.is_correct:
             self.nr_correct_answers += 1
+        else:
+            self.nr_incorrect_answers += 1
         return self
 
     def get_nr_answers(self):
@@ -207,6 +209,7 @@ class Question:
         self.final_answers = []
         self.current_answer = None
         self.nr_correct_answers = 0
+        self.nr_incorrect_answers = 0
         return self
 
     def postprocess(self):
@@ -238,6 +241,7 @@ class Question:
         new_question.answers = self.answers
         new_question.final_answers = self.final_answers
         new_question.nr_correct_answers = self.nr_correct_answers
+        new_question.nr_incorrect_answers = self.nr_incorrect_answers
         return new_question
 
     def toRST(self, nr, answers_weighted):
@@ -310,7 +314,7 @@ class Question:
         This is a helping function to compute the weight of an answer.
         When class is incorrect, the value return is negative. """
         nr_correct = self.nr_correct_answers
-        return nr_correct if is_correct else nr_correct - len(self.answers)
+        return self.nr_correct_answers if is_correct else self.nr_incorrect_answers
 
     def _compute_answer_weight_fulldecimal(self, is_correct):
         """ computes and returns the weight of an answer when there are
