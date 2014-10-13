@@ -314,7 +314,7 @@ class Question:
         This is a helping function to compute the weight of an answer.
         When class is incorrect, the value return is negative. """
         nr_correct = self.nr_correct_answers
-        return self.nr_correct_answers if is_correct else self.nr_incorrect_answers
+        return self.nr_correct_answers if is_correct else -self.nr_incorrect_answers
 
     def _compute_answer_weight_fulldecimal(self, is_correct):
         """ computes and returns the weight of an answer when there are
@@ -369,8 +369,7 @@ class Quiz:
         from start_nr """
         rstquestions = []
         for question in self.questions:
-            rstquestions.append(question.toRST(start_nr,
-                answers_weighted))
+            rstquestions.append(question.toRST(start_nr, answers_weighted))
             start_nr += 1
         return _RST_QUESTION_SEPARATION.join(rstquestions)
 
@@ -778,9 +777,6 @@ def process_answer_mark(lin):
             res = (correct, final)
     return res
 #
-def convert__weight_to_gift(weight):
-    """ it returns the weight as expected by Moodle's Gift format """
-    
 def main():
     options = get_options()
     quiz_set = QuizSet(options)
