@@ -90,6 +90,7 @@
 import sys, os
 import random
 import argparse
+import re
 #
 _QUESTION_MARK = "pregunta"
 _DESCRIPTION_MARK = "enunciat"
@@ -145,8 +146,14 @@ class Answer:
         return self.text <> ""
 
     def postprocess(self):
-        """ cleans up the answer text by removing start and end whitespaces """
+        """ cleans up the answer text by:
+            a) removing start and end whitespaces
+            b) adding a new line at the begining when it starts with a
+            comment or rst directive (btw: a comment matches "^\s*\.\..*" )
+        """
         self.text = self.text.strip()
+        if re.match("^\s*\.\..*", self.text):
+            self.text = os.linesep * 2 + self.text
         return self
 
     def __repr__(self):
