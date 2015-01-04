@@ -102,7 +102,7 @@ _RST_QUIZ_SEPARATION = "\n\n"
 _GIFT_QUESTION_SEPARATION = "\n\n\n"
 _GIFT_ANSWER_SEPARATION = "\n"
 #
-_GIFT_HEADER_TEMPLATE = "::Pregunta %s::[markdown]Indica quines respostes has marcat per la **pregunta nr. %s**.{"
+_GIFT_HEADER_TEMPLATE = "::Pregunta %s::[markdown]Indica quines respostes has marcat per la **pregunta %s**.{"
 _GIFT_ANSWER_TEMPLATE = "\t~%%%s%%He marcat la resposta %s)"
 #
 _QUESTION_TITLE = "Pregunta"
@@ -283,10 +283,10 @@ class Question:
                 all_weights.append(weight)
         return all_headers, all_weights
 
-    def toEvalGift(self, nr):
+    def toEvalGift(self, nr, title):
         """ extracts evaluation information from this question in
         gift format """
-        header = _GIFT_HEADER_TEMPLATE%(nr, nr)
+        header = _GIFT_HEADER_TEMPLATE%(nr, title)
         answers = self._evalgift_compose_answers()
         return "%s\n%s\n}\n%s"%(header, answers, _GIFT_QUESTION_SEPARATION)
 
@@ -397,8 +397,11 @@ class Quiz:
         """ extracts evaluation information of this quiz in gift
         format"""
         rstquestions = []
+        question_length = len(str(len(self.questions)))
         for question in self.questions:
-            rstquestions.append(question.toEvalGift(start_nr))
+            nr = ("%s"%("%%%si"%question_length))%start_nr
+            title = "%s. %s"%(start_nr, question.title)
+            rstquestions.append(question.toEvalGift(nr, title))
             start_nr += 1
         return _GIFT_QUESTION_SEPARATION.join(rstquestions)
 
