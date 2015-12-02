@@ -117,7 +117,7 @@ _MAP_GIFT_WEIGHTS = { # weights from nr of answers of the same category
     7:"14.2857",
     8:"12.5",
     9:"11.111",
-    10:"1'",
+    10:"10",
     -10:"-10",
     -9:"-11.111",
     -8:"-12.5",
@@ -682,7 +682,7 @@ def compose_output_filenames_and_exit_if_no_overwrite(options):
     options.outputfilenames = filenames
 #
 def get_options():
-    """ returns the call arguments as an optparse """
+    """ returns the call arguments as an argparse """
     p = compose_argparse()
     options = p.parse_args()
     exit_if_option_errors(options)
