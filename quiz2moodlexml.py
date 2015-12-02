@@ -123,13 +123,14 @@ _XML_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 %s
 </quiz>
 """     # it requires questions
+# TODO: change Preguntes guais by a arg specified value
 
 _XML_QUESTION_TEMPLATE = """
     <question type="multichoice">
         <name>
             <text>%s</text>
         </name>
-        <questiontext format="html">
+        <questiontext format="markdown">
             <text>
                 <![CDATA[<p>%s</p>]]>
             </text>
@@ -141,7 +142,7 @@ _XML_QUESTION_TEMPLATE = """
 """     # it requires (title, description, answers)
 
 _XML_ANSWER_TEMPLATE = """
-        <answer fraction="%s" format="html">
+        <answer fraction="%s" format="markdown">
             <text><![CDATA[
                 %s
                 ]]></text>
