@@ -132,7 +132,7 @@ _XML_QUESTION_TEMPLATE = """
         </name>
         <questiontext format="markdown">
             <text>
-                <![CDATA[<p>%s</p>]]>
+                <![CDATA[%s]]>
             </text>
         </questiontext>
         <single>false</single>
