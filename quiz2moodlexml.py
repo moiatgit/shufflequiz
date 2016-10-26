@@ -111,6 +111,7 @@ import argparse
 import re
 import datetime
 #
+_MARKUP_MARK = "markup"
 _QUESTION_MARK = "pregunta"
 _DESCRIPTION_MARK = "enunciat"
 _ANSWER_MARK = "resposta"
@@ -348,6 +349,7 @@ class Quiz:
     def __init__(self, filename, options, questions=None):
         self.filename = filename
         self.options = options
+        self.markup = None
         self.questions = [] if questions == None else questions
 
     def run(self):
@@ -365,6 +367,16 @@ class Quiz:
     def toXML(self):
         """ extracts evaluation information of this quiz in Moodle XML format"""
         return _XML_QUESTION_SEPARATION.join(question.toXML() for question in self.questions)
+
+    def _set_markup(self, lin, nlin):
+        """ sets the markup if it hasn't been set before. Otherwise it quits """
+        if self.markup:
+            show_scan_error_and_exit(self.filename, nlin, "unexpected redeclaration of markup")
+        if lin.endswith('md') or lin.endswith('markdown'):
+            self.markup = 'md'
+        else:
+            self.markup = lin[len(_MARKUP_MARK)+1:]
+            print("WARNING: XML for Moodle requires markdown as a markup. %s could not work"%self.markup)
 
     def _scan_question(self, lin, nlin, question):
         """ scans line lin on state="question" 
@@ -472,6 +484,8 @@ class Quiz:
                 nlin += 1
                 if is_a_comment(lin):
                     pass
+                elif is_markup_mark(lin):
+                    self.markup = çççç
                 elif state == "question":
                     state = self._scan_question(lin, nlin, question)
                 elif state == "title":
@@ -623,6 +637,10 @@ def exit_if_inputfiles_do_not_exist(filenames):
 def is_a_comment(lin):
     """ true if lin is a comment """
     return lin.startswith(".. #") or lin.startswith(".. /")
+
+def is_markup_mark(lin):
+    """ true if lin is the start of the markup type declaration """
+    return lin.startswith(".. %s:"%_MARKUP_MARK)
 
 def is_a_question(lin):
     """ true if lin is the start of a question """
