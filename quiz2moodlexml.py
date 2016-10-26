@@ -102,7 +102,6 @@
 #   There's a number of available options.
 #   Just call this script with -h option to check them
 
-# TODO: check quiz file for param .. markdown: md or markup. Otherwise it might not work for moodle
 # TODO: change 'Preguntes guais' by something in args
 
 import sys, os
@@ -354,6 +353,7 @@ class Quiz:
 
     def run(self):
         self._scan_quiz_file()
+        self._check_complete_quiz()
 
     def postprocess(self):
         """ performs cleaning up on questions """
@@ -367,16 +367,24 @@ class Quiz:
     def toXML(self):
         """ extracts evaluation information of this quiz in Moodle XML format"""
         return _XML_QUESTION_SEPARATION.join(question.toXML() for question in self.questions)
+    
+    def _check_complete_quiz(self):
+        """ checks whether the contents of the file contains everything required """
+        if self.markup == None:
+            print("WARNING: XML for Moodle requires markdown as a markup. File %s doesn't specify its markup and could not work"%self.filename)
+        elif self.markup != 'md':
+            print("WARNING: XML for Moodle requires markdown as a markup. File %s specifies '%s' and could not work"%(self.filename, self.markup))
+
 
     def _set_markup(self, lin, nlin):
         """ sets the markup if it hasn't been set before. Otherwise it quits """
         if self.markup:
             show_scan_error_and_exit(self.filename, nlin, "unexpected redeclaration of markup")
-        if lin.endswith('md') or lin.endswith('markdown'):
+        markup = lin[len(_MARKUP_MARK)+5:].strip().lower()
+        if markup in ('md', 'markdown'):
             self.markup = 'md'
         else:
-            self.markup = lin[len(_MARKUP_MARK)+1:]
-            print("WARNING: XML for Moodle requires markdown as a markup. %s could not work"%self.markup)
+            self.markup = markup
 
     def _scan_question(self, lin, nlin, question):
         """ scans line lin on state="question" 
@@ -485,7 +493,7 @@ class Quiz:
                 if is_a_comment(lin):
                     pass
                 elif is_markup_mark(lin):
-                    self.markup = çççç
+                    self._set_markup(lin, nlin)
                 elif state == "question":
                     state = self._scan_question(lin, nlin, question)
                 elif state == "title":
