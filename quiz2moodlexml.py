@@ -102,17 +102,27 @@
 #   There's a number of available options.
 #   Just call this script with -h option to check them
 
+# TODO: check quiz file for param .. markdown: md or markup. Otherwise it might not work for moodle
+# TODO: change 'Preguntes guais' by something in args
 
 import sys, os
 import random
 import argparse
 import re
+import datetime
 #
 _QUESTION_MARK = "pregunta"
 _DESCRIPTION_MARK = "enunciat"
 _ANSWER_MARK = "resposta"
 
 _XML_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- 
+     This file has been generated automaticaly using %s
+     from file/s: %s
+     on date: %s 
+-->
+
 <quiz>
 <!-- question: 0  -->
   <question type="category">
@@ -122,8 +132,7 @@ _XML_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
   </question>
 %s
 </quiz>
-"""     # it requires questions
-# TODO: change Preguntes guais by a arg specified value
+"""     # it requires some parameters
 
 _XML_QUESTION_TEMPLATE = """
     <question type="multichoice">
@@ -493,7 +502,11 @@ class QuizSet:
 
     def _export_xml(self):
         xmlquestions = _XML_QUIZ_SEPARATION.join(quiz.toXML() for quiz in self.quizes)
-        xmlcontents = _XML_TEMPLATE%(xmlquestions)
+
+        programname = sys.argv[0]
+        fromfiles = ", ".join(self.options.files)
+        ondate = datetime.datetime.now().isoformat()
+        xmlcontents = _XML_TEMPLATE%(programname, fromfiles, ondate, xmlquestions)
         with open(self.options.outputfilenames["xml"], "w") as f:
             f.write(xmlcontents)
 
