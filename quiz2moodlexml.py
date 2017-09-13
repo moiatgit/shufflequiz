@@ -33,6 +33,7 @@
 #   followed by one or more lines with the description of the answer.
 #
 #   An answer marked as + is considered a correct answer. On the other
+
 #   hand, incorrect answers will be marked as -. Any other mark will
 #   issue an error.
 
@@ -109,6 +110,7 @@ import random
 import argparse
 import re
 import datetime
+import logging
 #
 _MARKUP_MARK = "markup"
 _QUESTION_MARK = "pregunta"
@@ -189,6 +191,11 @@ _MAP_GIFT_WEIGHTS = { # weights from nr of answers of the same category
     -1:"-100" 
 }
 
+def setLoggingConfig():
+    """ sets the filename as the destination of the logs """
+    loggingFile = '/tmp/%s.log"%os.path.basename(sys.argv[0])'
+    loggingLevel = logging.INFO
+    logging.basicConfig(filename=loggingFile,level=loggingLevel, format="%(asctime)s %(levelname)s: %(message)s")
 #
 class Answer:
     def __init__(self, is_correct, is_final):
@@ -462,6 +469,7 @@ class Quiz:
                 show_scan_error_and_exit(self.filename, nlin, "unfinished answer")
         elif is_an_answer(lin):     # it is a new answer
             if question.get_nr_answers() >= self.options.maxanswers:
+                logging.error("Quiz._scan_answer(lin:%s, nlin:%s, question) \n\tquestion.get_nr_answers():%s\n\toptions.maxanswers:%s"%(lin, nlin, question.get_nr_answers(), self.options.maxanswers))
                 show_scan_error_and_exit(self.filename, nlin, "exceded max nr of answers per question")
             elif question.has_finished_current_answer():
                 self._process_current_answer(lin, nlin, question)
@@ -619,7 +627,6 @@ def show_error_and_exit(msg, exit_code=1):
     """ shows an error missage and exists with exit_code """
     print >> sys.stderr, "%s: error: %s"%(sys.argv[0], msg)
     sys.exit(exit_code)
-#
 
 def existing_files(filenames):
     """ returns the list of existing files """
@@ -690,6 +697,7 @@ def process_answer_mark(lin):
     return res
 #
 def main():
+    setLoggingConfig()
     options = get_options()
     quiz_set = QuizSet(options)
     quiz_set.run()
